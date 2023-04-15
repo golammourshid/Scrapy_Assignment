@@ -21,8 +21,9 @@ class CambridgeItem(scrapy.Item):
     application_close_dates = scrapy.Field()
     entry_requirements = scrapy.Field()
     language_requirements = scrapy.Field()
-    modules = scrapy.Field()
-    tuitions = scrapy.Field()
+    assessments = scrapy.Field()
+    tuition = scrapy.Field()
+    things_needed_to_apply = scrapy.Field()
 
 
 

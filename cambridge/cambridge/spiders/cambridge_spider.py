@@ -1,5 +1,9 @@
+import re
+
 import scrapy
 import requests
+import lxml.html
+from lxml.cssselect import CSSSelector
 from ..items import CambridgeItem
 
 
@@ -9,9 +13,8 @@ class CambridgeSpider(scrapy.Spider):
         'https://www.postgraduate.study.cam.ac.uk/courses/directory/poafmpafs'
     ]
     items = CambridgeItem()
+
     def parse(self, response, **kwargs):
-        # print("Title1 = " + str(response.xpath('//title/text()').get()))
-        # items = CambridgeItem()
         self.items["link"] = 'https://www.postgraduate.study.cam.ac.uk/courses/directory/poafmpafs'
         title = response.css('.easy-breadcrumb_segment-title::text')[0].extract()
         self.items['title'] = title
@@ -22,11 +25,9 @@ class CambridgeSpider(scrapy.Spider):
         self.items["university_title"] = 'University of Cambridge'
 
         locations = response.xpath('/html/body/div[9]/div/div[1]/div/ul/li[1]//a/@href').get()
-        # print('Locations is: ' + locations)
 
         description = response.css('.field-name-field-gao-course-overview p:nth-child(1)::text')[0].extract()
         description = repr(description)
-        # print("Des = " + description)
         yield scrapy.Request(locations, callback=self.get_locations)
         self.items['description'] = description
         aboutTitle = response.css('p:nth-child(5)::text')[0].extract()
@@ -34,44 +35,30 @@ class CambridgeSpider(scrapy.Spider):
         about = response.css('ol li::text').extract()
         about = ' '.join(about)
         about = aboutTitle + ' ' + about
-        # print("About Title= ")
-        # print(aboutTitle)
         self.items['about'] = about
 
         application_open_dates = response.css('dd:nth-child(2)::text').extract()
-        # print("Dates= ")
-        # print(application_open_dates)
         self.items['application_open_dates'] = application_open_dates[0]
 
         application_close_dates = response.css('dd:nth-child(4)::text').extract()
-        # print("Dates= ")
-        # print(application_close_dates)
         self.items['application_close_dates'] = application_close_dates[0]
 
         start_dates = response.css('dd:nth-child(6)::text').extract()
-        # print("Dates= ")
-        # print(start_dates)
         self.items['start_dates'] = start_dates[0]
 
         requirements_page = response.css('#page-content li:nth-child(3) a::attr(href)').get()
-        print("Pages= ")
-        print(requirements_page)
         yield response.follow(requirements_page, callback=self.requirements_info)
 
         finance_page = response.css('#page-content li:nth-child(4) a::attr(href)').get()
-        print("Pages= ")
-        print(finance_page)
         yield response.follow(finance_page, callback=self.finance_info)
 
-        # h1 + p
+        study_page = response.css('#page-content li:nth-child(2) a::attr(href)').get()
+        yield response.follow(study_page, callback=self.study_info)
 
-
-
-
-
-
-
-        # yield self.items
+        apply_page = response.css('#page-content li:nth-child(5) a::attr(href)').get()
+        print("Pages= ")
+        print(apply_page)
+        yield response.follow(apply_page, callback=self.apply_info)
 
     def get_locations(self, response):
         # locations = response.xpath('// *[ @ id = "content"] / div[2] / div[1] / div / div / p[2]/text()').get()
@@ -85,9 +72,6 @@ class CambridgeSpider(scrapy.Spider):
         entry_requirements = response.css('#page-content p+ p:nth-child(4)::text').extract()
         entry_requirements = ','.join(entry_requirements)
         self.items['entry_requirements'] = entry_requirements
-
-        # print("entry_requirements= ")
-        # print(entry_requirements)
 
         language_requirements = []
 
@@ -202,39 +186,59 @@ class CambridgeSpider(scrapy.Spider):
         final_score = ''.join(response.css('.campl-side-padding p~ p::text').extract()).strip()
         english_language_dict['score'] = final_score
         language_requirements.append(english_language_dict)
-
-
-
-
-
-
-
-        # print("Language_requirements= ")
-        # print(language_requirements)
         self.items['language_requirements'] = language_requirements
 
-        # yield self.items
 
     def finance_info(self, response):
-        tuitions = []
-
+        tuition = []
         # For Home
         fee_dict = {}
         fee_status = ''.join(response.css('h3+ .campl-control-group .btn-primary::text').extract()).strip()
         fee_dict['fee_status'] = fee_status
         total_annual_commitment = ''.join(response.css('tfoot th+ th::text').extract())
         fee_dict['total_annual_commitment'] = total_annual_commitment
+        tuition.append(fee_dict)
+        self.items['tuition'] = tuition
 
-        tuitions.append(fee_dict)
-        # For Overseas
-        fee_dict = {}
-        fee_status = ''.join(response.css('h3+ .campl-control-group .btn-primary+ .btn-default::text').extract()).strip()
-        fee_dict['fee_status'] = fee_status
-        total_annual_commitment = ''.join(response.xpath('//*[@id="fee_1"]/table/tfoot/tr/th[2]/text()').get())
-        fee_dict['total_annual_commitment'] = total_annual_commitment
+    def study_info(self, response):
+        assessments = []
 
-        tuitions.append(fee_dict)
+        # For Thesis
+        assessment_dict = {}
+        thesis_assessment_field = ''.join(response.css('h1+ h2::text').extract()).strip()
+        assessment_dict['field'] = thesis_assessment_field
+        thesis_assessment = ''.join(response.css('p:nth-child(10)::text').extract())
+        assessment_dict['details'] = thesis_assessment
+        assessments.append(assessment_dict)
 
+        # For Essays
+        assessment_dict = {}
+        essays_assessment_field = ''.join(response.css('h2:nth-child(11)::text').extract()).strip()
+        assessment_dict['field'] = essays_assessment_field
+        essays_assessment = ''.join(response.css('p:nth-child(12)::text').extract())
+        assessment_dict['details'] = essays_assessment
+        assessments.append(assessment_dict)
 
-        self.items['tuitions'] = tuitions
+        # For Written
+        assessment_dict = {}
+        written_assessment_field = ''.join(response.css('h2:nth-child(14)::text').extract()).strip()
+        assessment_dict['field'] = written_assessment_field
+        written_assessment = ''.join(response.css('p:nth-child(16)::text').extract())
+        assessment_dict['details'] = written_assessment
+        assessments.append(assessment_dict)
+
+        # For Other
+        assessment_dict = {}
+        other_assessment_field = ''.join(response.css('h2:nth-child(17)::text').extract()).strip()
+        assessment_dict['field'] = other_assessment_field
+        other_assessment = ''.join(response.css('p:nth-child(18)::text').extract())
+        assessment_dict['details'] = other_assessment
+        assessments.append(assessment_dict)
+        self.items['assessments'] = assessments
+
+    def apply_info(self, response):
+        things_needed_to_apply = response.css('li strong::text').extract()
+        things_needed_to_apply = [things.strip() for things in things_needed_to_apply if bool(re.search(r"[A-Z]", things))]
+        things_needed_to_apply = ', '.join(things_needed_to_apply).replace('\n', '')
+        self.items['things_needed_to_apply'] = things_needed_to_apply
 
