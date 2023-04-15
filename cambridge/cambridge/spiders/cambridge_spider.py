@@ -1,0 +1,240 @@
+import scrapy
+import requests
+from ..items import CambridgeItem
+
+
+class CambridgeSpider(scrapy.Spider):
+    name = 'cambridge'
+    start_urls = [
+        'https://www.postgraduate.study.cam.ac.uk/courses/directory/poafmpafs'
+    ]
+    items = CambridgeItem()
+    def parse(self, response, **kwargs):
+        # print("Title1 = " + str(response.xpath('//title/text()').get()))
+        # items = CambridgeItem()
+        self.items["link"] = 'https://www.postgraduate.study.cam.ac.uk/courses/directory/poafmpafs'
+        title = response.css('.easy-breadcrumb_segment-title::text')[0].extract()
+        self.items['title'] = title
+        self.items["study_level"] = 'Postgraduate'
+        qualification = response.xpath(
+            '//*[@id="block-fieldblock-node-gao-course-default-field-gao-sidebar"]/div/div/div/div/h4[2]/a/text()').get()
+        self.items['qualification'] = qualification
+        self.items["university_title"] = 'University of Cambridge'
+
+        locations = response.xpath('/html/body/div[9]/div/div[1]/div/ul/li[1]//a/@href').get()
+        # print('Locations is: ' + locations)
+
+        description = response.css('.field-name-field-gao-course-overview p:nth-child(1)::text')[0].extract()
+        description = repr(description)
+        # print("Des = " + description)
+        yield scrapy.Request(locations, callback=self.get_locations)
+        self.items['description'] = description
+        aboutTitle = response.css('p:nth-child(5)::text')[0].extract()
+
+        about = response.css('ol li::text').extract()
+        about = ' '.join(about)
+        about = aboutTitle + ' ' + about
+        # print("About Title= ")
+        # print(aboutTitle)
+        self.items['about'] = about
+
+        application_open_dates = response.css('dd:nth-child(2)::text').extract()
+        # print("Dates= ")
+        # print(application_open_dates)
+        self.items['application_open_dates'] = application_open_dates[0]
+
+        application_close_dates = response.css('dd:nth-child(4)::text').extract()
+        # print("Dates= ")
+        # print(application_close_dates)
+        self.items['application_close_dates'] = application_close_dates[0]
+
+        start_dates = response.css('dd:nth-child(6)::text').extract()
+        # print("Dates= ")
+        # print(start_dates)
+        self.items['start_dates'] = start_dates[0]
+
+        requirements_page = response.css('#page-content li:nth-child(3) a::attr(href)').get()
+        print("Pages= ")
+        print(requirements_page)
+        yield response.follow(requirements_page, callback=self.requirements_info)
+
+        finance_page = response.css('#page-content li:nth-child(4) a::attr(href)').get()
+        print("Pages= ")
+        print(finance_page)
+        yield response.follow(finance_page, callback=self.finance_info)
+
+        # h1 + p
+
+
+
+
+
+
+
+        # yield self.items
+
+    def get_locations(self, response):
+        # locations = response.xpath('// *[ @ id = "content"] / div[2] / div[1] / div / div / p[2]/text()').get()
+        locations = response.css('p~ h2+ p::text').extract()
+        locations = ','.join(locations).replace('\n', ' ')
+        self.items['locations'] = locations
+
+        yield self.items
+
+    def requirements_info(self, response):
+        entry_requirements = response.css('#page-content p+ p:nth-child(4)::text').extract()
+        entry_requirements = ','.join(entry_requirements)
+        self.items['entry_requirements'] = entry_requirements
+
+        # print("entry_requirements= ")
+        # print(entry_requirements)
+
+        language_requirements = []
+
+        # For IELTS Academic:
+        english_language_dict = {}
+        academic = ''.join(response.css('h1+ .campl-column6 h3::text').extract())
+        english_language_dict['language'] = 'English'
+        english_language_dict['test'] = academic
+
+        final_score = ''
+
+        listening = ''.join(response.css('h1+ .campl-column6 tbody tr:nth-child(1) th::text').extract())
+        final_score += listening
+        final_score += ': '
+        listening_score = ''.join(response.css('h1+ .campl-column6 tr:nth-child(1) td::text').extract())
+        final_score += listening_score
+        final_score += ', '
+
+        writing = ''.join(response.css('h1+ .campl-column6 tr:nth-child(2) th::text').extract())
+        final_score += writing
+        final_score += ': '
+        writing_score = ''.join(response.css('h1+ .campl-column6 tr:nth-child(2) td::text').extract())
+        final_score += writing_score
+        final_score += ', '
+
+        reading = ''.join(response.css('h1+ .campl-column6 tr:nth-child(3) th::text').extract())
+        final_score += reading
+        final_score += ': '
+        reading_score = ''.join(response.css('h1+ .campl-column6 tr:nth-child(3) td::text').extract())
+        final_score += reading_score
+        final_score += ', '
+
+        speaking = ''.join(response.css('h1+ .campl-column6 tr:nth-child(4) th::text').extract())
+        final_score += speaking
+        final_score += ': '
+        speaking_score = ''.join(response.css('h1+ .campl-column6 tr:nth-child(4) td::text').extract())
+        final_score += speaking_score
+        final_score += ', '
+
+        total = ''.join(response.css('h1+ .campl-column6 tr:nth-child(5) th::text').extract())
+        final_score += total
+        final_score += ': '
+        total_score = ''.join(response.css('h1+ .campl-column6 tr:nth-child(5) td::text').extract())
+        final_score += total_score
+
+        english_language_dict['score'] = final_score
+
+        language_requirements.append(english_language_dict)
+
+        # For TOEFL Internet Score
+        english_language_dict = {}
+        academic = ''.join(response.css('.campl-column6:nth-child(10) h3::text').extract())
+        english_language_dict['language'] = 'English'
+        english_language_dict['test'] = academic
+
+        final_score = ''
+
+        listening = ''.join(response.css('.campl-column6+ .campl-column6 tbody tr:nth-child(1) th::text').extract())
+        final_score += listening
+        final_score += ': '
+        listening_score = ''.join(response.css('.campl-column6+ .campl-column6 tr:nth-child(1) td::text').extract())
+        final_score += listening_score
+        final_score += ', '
+
+        writing = ''.join(response.css('.campl-column6+ .campl-column6 tr:nth-child(2) th::text').extract())
+        final_score += writing
+        final_score += ': '
+        writing_score = ''.join(response.css('.campl-column6+ .campl-column6 tr:nth-child(2) td::text').extract())
+        final_score += writing_score
+        final_score += ', '
+
+        reading = ''.join(response.css('.campl-column6+ .campl-column6 tr:nth-child(3) th::text').extract())
+        final_score += reading
+        final_score += ': '
+        reading_score = ''.join(response.css('.campl-column6+ .campl-column6 tr:nth-child(3) td::text').extract())
+        final_score += reading_score
+        final_score += ', '
+
+        speaking = ''.join(response.css('.campl-column6+ .campl-column6 tr:nth-child(4) th::text').extract())
+        final_score += speaking
+        final_score += ': '
+        speaking_score = ''.join(response.css('.campl-column6+ .campl-column6 tr:nth-child(4) td::text').extract())
+        final_score += speaking_score
+        final_score += ', '
+
+        total = ''.join(response.css('.campl-column6+ .campl-column6 tr:nth-child(5) th::text').extract())
+        final_score += total
+        final_score += ': '
+        total_score = ''.join(response.css('.campl-column6+ .campl-column6 tr:nth-child(5) td::text').extract())
+        final_score += total_score
+
+        english_language_dict['score'] = final_score
+
+        language_requirements.append(english_language_dict)
+
+        # For CAE
+        english_language_dict = {}
+        academic = ''.join(response.css('.campl-column6~ .campl-column6+ .campl-column6 h3:nth-child(1)::text').extract())
+        english_language_dict['language'] = 'English'
+        english_language_dict['test'] = academic
+
+        final_score = ''.join(response.css('.campl-side-padding p:nth-child(2)::text').extract()).strip()
+        english_language_dict['score'] = final_score
+        language_requirements.append(english_language_dict)
+
+        # For CPE
+        english_language_dict = {}
+        academic = ''.join(response.css('p+ h3::text').extract())
+        english_language_dict['language'] = 'English'
+        english_language_dict['test'] = academic
+
+        final_score = ''.join(response.css('.campl-side-padding p~ p::text').extract()).strip()
+        english_language_dict['score'] = final_score
+        language_requirements.append(english_language_dict)
+
+
+
+
+
+
+
+        # print("Language_requirements= ")
+        # print(language_requirements)
+        self.items['language_requirements'] = language_requirements
+
+        # yield self.items
+
+    def finance_info(self, response):
+        tuitions = []
+
+        # For Home
+        fee_dict = {}
+        fee_status = ''.join(response.css('h3+ .campl-control-group .btn-primary::text').extract()).strip()
+        fee_dict['fee_status'] = fee_status
+        total_annual_commitment = ''.join(response.css('tfoot th+ th::text').extract())
+        fee_dict['total_annual_commitment'] = total_annual_commitment
+
+        tuitions.append(fee_dict)
+        # For Overseas
+        fee_dict = {}
+        fee_status = ''.join(response.css('h3+ .campl-control-group .btn-primary+ .btn-default::text').extract()).strip()
+        fee_dict['fee_status'] = fee_status
+        total_annual_commitment = ''.join(response.xpath('//*[@id="fee_1"]/table/tfoot/tr/th[2]/text()').get())
+        fee_dict['total_annual_commitment'] = total_annual_commitment
+
+        tuitions.append(fee_dict)
+
+
+        self.items['tuitions'] = tuitions
+
